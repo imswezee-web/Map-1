@@ -910,7 +910,7 @@ html, body {
   background: rgba(6,8,9,0.7);
   border: 1px solid var(--border);
   border-radius: 2px;
-  padding: 20px 16px 12px;
+  padding: 20px 20px 16px;
   width: 100%;
   max-width: 960px;
 }
@@ -922,8 +922,94 @@ html, body {
   letter-spacing: 3px;
   color: var(--text-dim);
   text-transform: uppercase;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   text-align: center;
+}
+
+.zc-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.zc-leg-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  margin-right: 5px;
+  flex-shrink: 0;
+}
+
+.zc-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zc-row {
+  display: grid;
+  grid-template-columns: 28px 140px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.zc-row:hover {
+  background: rgba(96,165,250,0.05);
+}
+
+.zc-rank {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: right;
+  opacity: 0.5;
+}
+
+.zc-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: #8ab88a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.5px;
+}
+
+.zc-track {
+  height: 14px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+}
+
+.zc-seg {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.zc-seg--loc { background: #60a5fa; opacity: 0.85; }
+.zc-seg--arc { background: #ee5a24; opacity: 0.85; }
+.zc-seg--art { background: #f59e0b; opacity: 0.85; }
+
+.zc-val {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: #a0c8a0;
+  text-align: right;
+  font-weight: 700;
 }
 
 #stat-bars {

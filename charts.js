@@ -47,10 +47,15 @@ const ChartsModule = (() => {
     arc: '#ee5a24',
   })[k] || '#60a5fa';
 
+  // Нормалізуємо назву зони: кожне слово з великої літери
+  const normalizeZone = z => (z || '').trim().replace(/\S+/g, function(w) {
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  });
+
   const getAllZones = () => {
-    const zones = new Set();
-    all().forEach(d => { if (d.zone) zones.add(d.zone); });
-    return Array.from(zones).sort();
+    const seen = new Set();
+    all().forEach(function(d) { if (d.zone) seen.add(normalizeZone(d.zone)); });
+    return Array.from(seen).sort();
   };
 
   function renderZoneFilter() {
@@ -75,7 +80,7 @@ const ChartsModule = (() => {
     const q = query.toLowerCase().trim();
     const items = all().filter(function(d) {
       if (listTypeFilter !== 'all' && typeKey(d.type) !== listTypeFilter) return false;
-      if (listZoneFilter !== 'all' && d.zone !== listZoneFilter) return false;
+      if (listZoneFilter !== 'all' && normalizeZone(d.zone) !== listZoneFilter) return false;
       if (q && !d.name.toLowerCase().includes(q) && !(d.description || '').toLowerCase().includes(q)) return false;
       return true;
     });
@@ -147,7 +152,7 @@ const ChartsModule = (() => {
   }
 
   function goToZone(zone) {
-    listZoneFilter = zone;
+    listZoneFilter = normalizeZone(zone);
     listTypeFilter = 'all';
     switchPane('list');
     setTimeout(function() { renderList(''); }, 50);
@@ -172,76 +177,48 @@ const ChartsModule = (() => {
     const bars = document.getElementById('stat-bars');
     if (!bars) return;
 
-    // ── Підрахунок об'єктів по зонах ──
+    // ── Підрахунок об'єктів по зонах (з розбивкою по типу) ──
     const zoneMap = {};
     data.forEach(function(d) {
       if (!d.zone) return;
-      zoneMap[d.zone] = (zoneMap[d.zone] || 0) + 1;
+      const z = normalizeZone(d.zone);
+      if (!zoneMap[z]) zoneMap[z] = { total: 0, loc: 0, arc: 0, art: 0 };
+      zoneMap[z].total++;
+      zoneMap[z][typeKey(d.type)]++;
     });
-    const zoneSorted = Object.entries(zoneMap).sort(function(a, b) { return b[1] - a[1]; });
-    const maxZoneVal = zoneSorted.length ? zoneSorted[0][1] : 1;
+    const zoneSorted = Object.entries(zoneMap).sort(function(a, b) { return b[1].total - a[1].total; });
+    const maxZoneVal = zoneSorted.length ? zoneSorted[0][1].total : 1;
 
-    // ── SVG стовпчастий графік ──
-    const chartW = 520;
-    const chartH = 200;
-    const padL = 36;  // вісь Y
-    const padB = 72;  // вісь X (підписи)
-    const padT = 36;
-    const padR = 16;
-    const plotW = chartW - padL - padR;
-    const plotH = chartH - padT - padB;
-    const n = zoneSorted.length;
-    const barW = Math.max(8, Math.floor(plotW / n) - 4);
-    const gap  = Math.floor(plotW / n);
-
-    // Сітка Y
-    const yTicks = 4;
-    let gridLines = '';
-    let yLabels = '';
-    for (let i = 0; i <= yTicks; i++) {
-      const v = Math.round(maxZoneVal * i / yTicks);
-      const y = padT + plotH - Math.round(plotH * i / yTicks);
-      gridLines += '<line x1="' + padL + '" y1="' + y + '" x2="' + (padL + plotW) + '" y2="' + y + '" stroke="#1e2d1e" stroke-width="1"/>';
-      yLabels   += '<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end" fill="#5a7a5a" font-size="9">' + v + '</text>';
-    }
-
-    // Стовпчики + підписи X
-    let barsHtml = '';
-    let xLabels  = '';
-    zoneSorted.forEach(function(entry, i) {
+    // ── Горизонтальний HTML-графік ──
+    const zoneRows = zoneSorted.map(function(entry, i) {
       const zone = entry[0];
-      const val  = entry[1];
-      const bh   = Math.max(2, Math.round(plotH * val / maxZoneVal));
-      const x    = padL + i * gap + Math.floor((gap - barW) / 2);
-      const y    = padT + plotH - bh;
-      // колір — чергуємо
-      const col  = ['#60a5fa','#f59e0b','#ee5a24','#3a6ea8','#c87a08'][i % 5];
-      barsHtml += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + bh + '" fill="' + col + '" rx="2" opacity="0.85"/>';
-      // значення над стовпчиком
-      barsHtml += '<text x="' + (x + barW/2) + '" y="' + (y - 4) + '" text-anchor="middle" fill="#a0c8a0" font-size="9">' + val + '</text>';
-      // підпис X — похилий
-      const lx = x + barW / 2;
-      const ly = padT + plotH + 8;
-      xLabels += '<text transform="translate(' + lx + ',' + ly + ') rotate(40)" text-anchor="start" fill="#7c9f76" font-size="9">' + zone + '</text>';
-    });
+      const v    = entry[1];
+      const pct  = Math.round(v.total / maxZoneVal * 100);
+      const locW = Math.round(v.loc / maxZoneVal * 100);
+      const arcW = Math.round(v.arc / maxZoneVal * 100);
+      const artW = Math.round(v.art / maxZoneVal * 100);
+      const rank = i + 1;
+      return (
+        '<div class="zc-row" onclick="ChartsModule.goToZone(\'' + zone.replace(/'/g, "\\'") + '\')" title="Переглянути ' + zone + '">' +
+          '<div class="zc-rank">' + rank + '</div>' +
+          '<div class="zc-label">' + zone + '</div>' +
+          '<div class="zc-track">' +
+            '<div class="zc-seg zc-seg--loc" style="width:' + locW + '%"></div>' +
+            '<div class="zc-seg zc-seg--arc" style="width:' + arcW + '%"></div>' +
+            '<div class="zc-seg zc-seg--art" style="width:' + artW + '%"></div>' +
+          '</div>' +
+          '<div class="zc-val">' + v.total + '</div>' +
+        '</div>'
+      );
+    }).join('');
 
-    // Осі
-    const axes =
-      '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (padT+plotH) + '" stroke="#2d4a2d" stroke-width="1.5"/>' +
-      '<line x1="' + padL + '" y1="' + (padT+plotH) + '" x2="' + (padL+plotW) + '" y2="' + (padT+plotH) + '" stroke="#2d4a2d" stroke-width="1.5"/>';
-
-    // Підписи осей
-    const axisLabels =
-      '<text x="' + (padL + plotW/2) + '" y="' + (chartH - 2) + '" text-anchor="middle" fill="#5a7a5a" font-size="10">Зона</text>' +
-      '<text transform="translate(10,' + (padT + plotH/2) + ') rotate(-90)" text-anchor="middle" fill="#5a7a5a" font-size="10">Кількість об\'єктів</text>';
-
-    // Назва графіка
-    const title = '<text x="' + (chartW/2) + '" y="18" text-anchor="middle" fill="#7c9f76" font-size="11" letter-spacing="1.5">ОБ\'ЄКТИ ПО ЗОНАХ</text>';
-
-    const svg =
-      '<svg class="zone-chart-svg" viewBox="0 0 ' + chartW + ' ' + chartH + '" xmlns="http://www.w3.org/2000/svg">' +
-        title + gridLines + yLabels + axes + barsHtml + xLabels + axisLabels +
-      '</svg>';
+    const legend =
+      '<div class="zc-legend">' +
+        '<span class="zc-leg-dot" style="background:#60a5fa"></span>Локації' +
+        '<span class="zc-leg-dot" style="background:#ee5a24;margin-left:14px"></span>Аномалії' +
+        '<span class="zc-leg-dot" style="background:#f59e0b;margin-left:14px"></span>Артефакти' +
+        '<span style="margin-left:auto;color:#3a5a3a;font-size:10px">Клікни на зону → фільтр списку</span>' +
+      '</div>';
 
     bars.innerHTML =
       '<div class="pane-title" style="margin-top:4px">Типи об\'єктів</div>' +
@@ -252,7 +229,8 @@ const ChartsModule = (() => {
       '</div>' +
       '<div class="zone-chart-wrap">' +
         '<div class="zone-chart-title">Розподіл по зонах</div>' +
-        svg +
+        legend +
+        '<div class="zc-chart">' + zoneRows + '</div>' +
       '</div>';
   }
 

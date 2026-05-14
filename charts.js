@@ -1,6 +1,7 @@
 /* =============================================
    STALKER 2 — charts.js
    Логіка вкладок Список і Статистика
+   Діаграми: Chart.js 4.x
    ============================================= */
 
 'use strict';
@@ -9,6 +10,10 @@ const ChartsModule = (() => {
 
   let listTypeFilter = 'all';
   let listZoneFilter = 'all';
+
+  // Зберігаємо екземпляри Chart.js щоб знищувати перед перемалюванням
+  let _chartDoughnut = null;
+  let _chartZone     = null;
 
   const all = () => {
     const d = window.APP_DATA;
@@ -21,7 +26,6 @@ const ChartsModule = (() => {
   };
 
   const typeKey = t => ({
-    'локація':       'loc',
     'локація':       'loc',
     'артефакт':      'art',
     'архо-аномалія': 'arc',
@@ -47,7 +51,6 @@ const ChartsModule = (() => {
     arc: '#ee5a24',
   })[k] || '#60a5fa';
 
-  // Нормалізуємо назву зони: кожне слово з великої літери
   const normalizeZone = z => (z || '').trim().replace(/\S+/g, function(w) {
     return w.charAt(0).toUpperCase() + w.slice(1);
   });
@@ -58,6 +61,13 @@ const ChartsModule = (() => {
     return Array.from(seen).sort();
   };
 
+  // ── Знищити Chart.js-екземпляр безпечно ──
+  function _destroyChart(ref) {
+    if (ref) { try { ref.destroy(); } catch(e) {} }
+    return null;
+  }
+
+  // ── Рендер фільтра зон ──
   function renderZoneFilter() {
     const container = document.getElementById('zone-filter-bar');
     if (!container) return;
@@ -72,6 +82,7 @@ const ChartsModule = (() => {
       btns;
   }
 
+  // ── Рендер списку карток ──
   function renderList(query) {
     if (query === undefined) query = '';
     renderZoneFilter();
@@ -98,10 +109,9 @@ const ChartsModule = (() => {
       const price = d.price
         ? '<div class="card-price">Ціна: ' + d.price.toLocaleString() + ' руб.</div>'
         : '';
-      const clickable = hasCoords ? ' list-card--clickable' : '';
+      const clickable   = hasCoords ? ' list-card--clickable' : '';
       const clickHandler = hasCoords ? ' onclick="ChartsModule.selectOnMap(' + d.id + ')"' : '';
 
-      // Визначаємо шлях до фото залежно від типу
       let imgSrc = '';
       let imgWrapClass = 'card-img-wrap';
       if (k === 'loc') {
@@ -158,26 +168,30 @@ const ChartsModule = (() => {
     setTimeout(function() { renderList(''); }, 50);
   }
 
+  // ══════════════════════════════════════════════
+  //  renderStats — Chart.js діаграми
+  // ══════════════════════════════════════════════
   function renderStats() {
     const data  = all();
     const total = data.length;
-    const locs = data.filter(function(d) { return typeKey(d.type) === 'loc'; }).length;
-    const arts = data.filter(function(d) { return typeKey(d.type) === 'art'; }).length;
-    const arcs = data.filter(function(d) { return typeKey(d.type) === 'arc'; }).length;
+    const locs  = data.filter(function(d) { return typeKey(d.type) === 'loc'; }).length;
+    const arts  = data.filter(function(d) { return typeKey(d.type) === 'art'; }).length;
+    const arcs  = data.filter(function(d) { return typeKey(d.type) === 'arc'; }).length;
 
+    // ── Stat-cards ──
     const cards = document.getElementById('stat-cards');
     if (cards) {
       cards.innerHTML =
         '<div class="stat-card"><div class="stat-value">' + total + '</div><div class="stat-label">Всього об\'єктів</div></div>' +
-        '<div class="stat-card"><div class="stat-value" style="color:#60a5fa">' + locs + '</div><div class="stat-label">Локацій</div></div>' +
-        '<div class="stat-card"><div class="stat-value" style="color:#ee5a24">' + arcs + '</div><div class="stat-label">Архіаномалій</div></div>' +
-        '<div class="stat-card"><div class="stat-value" style="color:#f59e0b">' + arts + '</div><div class="stat-label">Артефактів</div></div>';
+        '<div class="stat-card"><div class="stat-value" style="color:#60a5fa">' + locs  + '</div><div class="stat-label">Локацій</div></div>' +
+        '<div class="stat-card"><div class="stat-value" style="color:#ee5a24">' + arcs  + '</div><div class="stat-label">Архіаномалій</div></div>' +
+        '<div class="stat-card"><div class="stat-value" style="color:#f59e0b">' + arts  + '</div><div class="stat-label">Артефактів</div></div>';
     }
 
     const bars = document.getElementById('stat-bars');
     if (!bars) return;
 
-    // ── Підрахунок об'єктів по зонах (з розбивкою по типу) ──
+    // ── Підрахунок по зонах ──
     const zoneMap = {};
     data.forEach(function(d) {
       if (!d.zone) return;
@@ -187,59 +201,162 @@ const ChartsModule = (() => {
       zoneMap[z][typeKey(d.type)]++;
     });
     const zoneSorted = Object.entries(zoneMap).sort(function(a, b) { return b[1].total - a[1].total; });
-    const maxZoneVal = zoneSorted.length ? zoneSorted[0][1].total : 1;
+    const zoneLabels = zoneSorted.map(function(e) { return e[0]; });
+    const zoneLoc    = zoneSorted.map(function(e) { return e[1].loc; });
+    const zoneArc    = zoneSorted.map(function(e) { return e[1].arc; });
+    const zoneArt    = zoneSorted.map(function(e) { return e[1].art; });
 
-    // ── Горизонтальний HTML-графік ──
-    const zoneRows = zoneSorted.map(function(entry, i) {
-      const zone = entry[0];
-      const v    = entry[1];
-      const pct  = Math.round(v.total / maxZoneVal * 100);
-      const locW = Math.round(v.loc / maxZoneVal * 100);
-      const arcW = Math.round(v.arc / maxZoneVal * 100);
-      const artW = Math.round(v.art / maxZoneVal * 100);
-      const rank = i + 1;
-      return (
-        '<div class="zc-row" onclick="ChartsModule.goToZone(\'' + zone.replace(/'/g, "\\'") + '\')" title="Переглянути ' + zone + '">' +
-          '<div class="zc-rank">' + rank + '</div>' +
-          '<div class="zc-label">' + zone + '</div>' +
-          '<div class="zc-track">' +
-            '<div class="zc-seg zc-seg--loc" style="width:' + locW + '%"></div>' +
-            '<div class="zc-seg zc-seg--arc" style="width:' + arcW + '%"></div>' +
-            '<div class="zc-seg zc-seg--art" style="width:' + artW + '%"></div>' +
-          '</div>' +
-          '<div class="zc-val">' + v.total + '</div>' +
-        '</div>'
-      );
-    }).join('');
-
-    const legend =
-      '<div class="zc-legend">' +
-        '<span class="zc-leg-dot" style="background:#60a5fa"></span>Локації' +
-        '<span class="zc-leg-dot" style="background:#ee5a24;margin-left:14px"></span>Аномалії' +
-        '<span class="zc-leg-dot" style="background:#f59e0b;margin-left:14px"></span>Артефакти' +
-        '<span style="margin-left:auto;color:#3a5a3a;font-size:10px">Клікни на зону → фільтр списку</span>' +
-      '</div>';
-
+    // ── Будуємо розмітку для двох canvas ──
     bars.innerHTML =
       '<div class="pane-title" style="margin-top:4px">Типи об\'єктів</div>' +
-      '<div class="bar-section">' +
-        (total ? barRow('Локації',      locs, total, '#60a5fa') : '') +
-        (total ? barRow('Архіаномалії', arcs, total, '#ee5a24') : '') +
-        (total ? barRow('Артефакти',    arts, total, '#f59e0b') : '') +
+      '<div class="chartjs-wrap chartjs-wrap--doughnut">' +
+        '<canvas id="chartjs-doughnut"></canvas>' +
       '</div>' +
       '<div class="zone-chart-wrap">' +
-        '<div class="zone-chart-title">Розподіл по зонах</div>' +
-        legend +
-        '<div class="zc-chart">' + zoneRows + '</div>' +
+        '<div class="zone-chart-title">Розподіл по зонах' +
+          '<span class="zc-click-hint">Клікни на зону → фільтр списку</span>' +
+        '</div>' +
+        '<div class="chartjs-wrap chartjs-wrap--bar">' +
+          '<canvas id="chartjs-zone"></canvas>' +
+        '</div>' +
       '</div>';
-  }
 
-  function barRow(label, value, total, color) {
-    const pct = total > 0 ? Math.round(value / total * 100) : 0;
-    return '<div class="bar-row">' +
-      '<div class="bar-label"><span>' + label + '</span><span style="color:' + color + '">' + value + ' (' + pct + '%)</span></div>' +
-      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
-      '</div>';
+    // ── Знищуємо старі екземпляри ──
+    _chartDoughnut = _destroyChart(_chartDoughnut);
+    _chartZone     = _destroyChart(_chartZone);
+
+    // ── Перевіряємо наявність Chart.js ──
+    if (typeof Chart === 'undefined') {
+      bars.insertAdjacentHTML('afterbegin',
+        '<div style="color:#ee5a24;padding:8px 0;font-size:12px">⚠ Chart.js не підключено. ' +
+        'Додайте &lt;script src="https://cdn.jsdelivr.net/npm/chart.js"&gt;&lt;/script&gt; в index.html.</div>');
+      return;
+    }
+
+    // Спільні налаштування шрифту / кольорів для Chart.js
+    Chart.defaults.color = '#8fa87a';
+    Chart.defaults.font.family = 'inherit';
+    Chart.defaults.font.size   = 11;
+
+    // ── 1. Кругова (doughnut) — типи об'єктів ──
+    const ctxD = document.getElementById('chartjs-doughnut');
+    if (ctxD && total > 0) {
+      _chartDoughnut = new Chart(ctxD, {
+        type: 'doughnut',
+        data: {
+          labels: ['Локації', 'Архіаномалії', 'Артефакти'],
+          datasets: [{
+            data: [locs, arcs, arts],
+            backgroundColor: ['#60a5fa', '#ee5a24', '#f59e0b'],
+            borderColor:     ['#1a2a1a', '#1a2a1a', '#1a2a1a'],
+            borderWidth: 2,
+            hoverOffset: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: '62%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                padding: 16,
+                boxWidth: 12,
+                boxHeight: 12,
+                color: '#8fa87a',
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const val = ctx.parsed;
+                  const pct = total > 0 ? Math.round(val / total * 100) : 0;
+                  return ' ' + ctx.label + ': ' + val + ' (' + pct + '%)';
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    // ── 2. Stacked horizontal bar — розподіл по зонах ──
+    const ctxZ = document.getElementById('chartjs-zone');
+    if (ctxZ && zoneSorted.length > 0) {
+      _chartZone = new Chart(ctxZ, {
+        type: 'bar',
+        data: {
+          labels: zoneLabels,
+          datasets: [
+            {
+              label: 'Локації',
+              data: zoneLoc,
+              backgroundColor: '#60a5fa',
+              borderColor:     '#1a2a1a',
+              borderWidth: 1,
+            },
+            {
+              label: 'Аномалії',
+              data: zoneArc,
+              backgroundColor: '#ee5a24',
+              borderColor:     '#1a2a1a',
+              borderWidth: 1,
+            },
+            {
+              label: 'Артефакти',
+              data: zoneArt,
+              backgroundColor: '#f59e0b',
+              borderColor:     '#1a2a1a',
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          indexAxis: 'y',        // горизонтальні смуги
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              stacked: true,
+              grid:  { color: 'rgba(96,164,90,0.08)' },
+              ticks: { color: '#8fa87a', stepSize: 1 },
+            },
+            y: {
+              stacked: true,
+              grid:  { color: 'rgba(96,164,90,0.08)' },
+              ticks: { color: '#8fa87a', font: { size: 11 } },
+            },
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                padding: 14,
+                boxWidth: 12,
+                boxHeight: 12,
+                color: '#8fa87a',
+              },
+            },
+            tooltip: {
+              mode: 'index',
+              axis: 'y',
+            },
+          },
+          onClick: function(evt, elements) {
+            if (!elements.length) return;
+            const idx = elements[0].index;
+            if (zoneLabels[idx]) ChartsModule.goToZone(zoneLabels[idx]);
+          },
+          onHover: function(evt, elements) {
+            evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+          },
+        },
+      });
+
+      // Динамічна висота: ~32px на зону
+      ctxZ.parentElement.style.height = Math.max(160, zoneSorted.length * 32 + 48) + 'px';
+    }
   }
 
   return { renderList, renderStats, setListFilter, setZoneFilter, selectOnMap, goToZone };

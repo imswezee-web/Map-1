@@ -48,26 +48,15 @@ const MapModule = (() => {
 
     map.getContainer().style.background = '#0a0c0a';
 
-    const tileLayer = L.GridLayer.extend({
-      createTile: function (coords) {
-        const tile = document.createElement('img');
-        const { x, y, z } = coords;
-        tile.style.width = TILE_SIZE + 'px';
-        tile.style.height = TILE_SIZE + 'px';
-        tile.draggable = false;
-        tile.onload = () => {};
-        tile.onerror = () => tile.style.display = 'none';
-        tile.src = `map.jpg/tiles/${z}/${x}/${y}.jpg`;
-        return tile;
-      }
-    });
-
-    new tileLayer({
-      tileSize: TILE_SIZE,
-      keepBuffer: 3,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      noWrap: true,
+    L.tileLayer('map.jpg/tiles/{z}/{x}/{y}.jpg', {
+      tileSize:           TILE_SIZE,
+      minZoom:            0,
+      maxZoom:            MAX_ZOOM,
+      keepBuffer:         3,
+      updateWhenIdle:     true,
+      updateWhenZooming:  false,
+      noWrap:             true,
+      errorTileUrl:       'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     }).addTo(map);
 
     map.on('click', (e) => {
@@ -527,17 +516,7 @@ const MapModule = (() => {
 
   function smoothZoom(targetZoom) {
     if (!map) return;
-    const current = map.getZoom();
-    const step = targetZoom > current ? 0.25 : -0.25;
-    function animate() {
-      const z = map.getZoom();
-      if ((step > 0 && z >= targetZoom) || (step < 0 && z <= targetZoom)) {
-        map.setZoom(targetZoom); return;
-      }
-      map.setZoom(z + step, { animate: false });
-      requestAnimationFrame(animate);
-    }
-    animate();
+    map.setZoom(targetZoom, { animate: true });
   }
 
   function zoom(factor) {
@@ -551,13 +530,13 @@ const MapModule = (() => {
 
   function resetView() {
     if (!map) return;
-    map.setView([-TILE_SIZE / 2, TILE_SIZE / 2], 1, { animate: true, duration: 0.5 });
+    map.flyTo([-TILE_SIZE / 2, TILE_SIZE / 2], 1, { animate: true, duration: 0.6 });
   }
 
   function panToMarker(coords, item) {
     if (!map) return;
 
-    map.setView(coords, 5, { animate: true, duration: 0.6 });
+    map.flyTo(coords, 5, { animate: true, duration: 0.6 });
 
     const pulseIcon = L.divIcon({
       className: 'map-focus-pulse',

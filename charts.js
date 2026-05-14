@@ -256,15 +256,17 @@ const ChartsModule = (() => {
         options: {
           responsive: true,
           maintainAspectRatio: true,
+          aspectRatio: 1.4,
           cutout: '62%',
           plugins: {
             legend: {
-              position: 'right',
+              position: 'bottom',
               labels: {
-                padding: 16,
+                padding: 20,
                 boxWidth: 12,
                 boxHeight: 12,
                 color: '#8fa87a',
+                maxWidth: 400,
               },
             },
             tooltip: {

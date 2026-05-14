@@ -1019,6 +1019,31 @@ html, body {
   width: 100%;
 }
 
+.chartjs-wrap {
+  width: 100%;
+  max-width: 960px;
+}
+
+.chartjs-wrap--doughnut {
+  width: 420px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.chartjs-wrap--doughnut canvas {
+  display: block;
+}
+
+#stat-bars .pane-title {
+  width: 420px;
+  text-align: center;
+}
+
+#stat-bars .pane-title::after {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .zone-chart-svg {
   width: 100%;
   display: block;

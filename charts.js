@@ -155,7 +155,13 @@ const ChartsModule = (() => {
   }
 
   function selectOnMap(id) {
-    const item = all().find(function(d) { return d.id === id; });
+    // Шукаємо по кожному масиву окремо, щоб уникнути колізій id між масивами
+    const d = window.APP_DATA;
+    const item = (d && (
+      (d.archanomaly || []).find(function(x) { return x.id === id; }) ||
+      (d.artifacts   || []).find(function(x) { return x.id === id; }) ||
+      (d.locations   || []).find(function(x) { return x.id === id; })
+    )) || null;
     if (!item || !item.coords) return;
     switchPane('map');
     setTimeout(function() { MapModule.panToMarker(item.coords, item); }, 100);
